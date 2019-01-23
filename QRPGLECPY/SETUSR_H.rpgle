@@ -1,0 +1,45 @@
+**FREE
+//- Copyright (c) 2018, 2019 Christian Brunner
+//-
+//- Permission is hereby granted, free of charge, to any person obtaining a copy
+//- of this software and associated documentation files (the "Software"), to deal
+//- in the Software without restriction, including without limitation the rights
+//- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//- copies of the Software, and to permit persons to whom the Software is
+//- furnished to do so, subject to the following conditions:
+
+//- The above copyright notice and this permission notice shall be included in all
+//- copies or substantial portions of the Software.
+
+//- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//- SOFTWARE.
+
+/if not defined (USRPRF_CONTROL)
+
+/define USRPRF_CONTROL
+
+DCL-PR QSYGETPH EXTPGM('QSYGETPH');
+  User     CHAR(10) CONST;
+  Password CHAR(32) CONST;
+  pHandler CHAR(12);
+  Error    CHAR(32766) OPTIONS(*VARSIZE :*NOPASS);
+  Length   INT(10) CONST OPTIONS(*NOPASS);
+  pCCSID   INT(10) CONST OPTIONS(*NOPASS);
+END-PR;
+DCL-PR QWTSETP EXTPGM('QWTSETP');
+  pHandler CHAR(12);
+  Error CHAR(32766) OPTIONS(*VARSIZE);
+END-PR;
+
+DCL-DS SwitchUserProfile QUALIFIED INZ;
+  NewUser CHAR(10);
+  Password CHAR(32);
+  UserHandler CHAR(12);
+END-DS;
+
+/endif
