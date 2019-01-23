@@ -19,32 +19,27 @@
 //- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //- SOFTWARE.
 
-//  Created by BRC on 25.07.2018 - 16.01.2019
+//  Created by BRC on 25.07.2018 - 08.01.2019
 
 // Socketclient to send objects over tls to another IBMi
-//   I use the socket_h and gskssl_h header from scott klement - (c) Scott Klement
+//   Based on the socketapi from scott klement - (c) Scott Klement
 //   https://www.scottklement.com/rpg/socktut/socktut.savf
 
 
-/INCLUDE QRPGLECPY,H_SPECS
+/INCLUDE './QRPGLECPY/H_SPECS.rpgle'
 CTL-OPT MAIN(Main);
 
 
-DCL-PR Main EXTPGM('ZSERVERRG');
-  Port UNS(5) CONST;
-  UseTLS IND CONST;
-  AppID CHAR(32) CONST;
-  Authentication CHAR(7) CONST;
-END-PR;
+/INCLUDE './QRPGLECPY/SOCKET_H.rpgle'
+/INCLUDE './QRPGLECPY/GSKSSL_H.rpgle'
+/INCLUDE './QRPGLECPY/QMHSNDPM.rpgle'
+/INCLUDE './QRPGLECPY/SYSTEM.rpgle'
 
-/INCLUDE QRPGLECPY,SOCKET_H
-/INCLUDE QRPGLECPY,GSKSSL_H
-/INCLUDE QRPGLECPY,QMHSNDPM
-/INCLUDE QRPGLECPY,SYSTEM
-/INCLUDE QRPGLECPY,ERRNO_H
+DCL-C TRUE *ON;
+DCL-C FALSE *OFF;
 
-/INCLUDE QRPGLECPY,PSDS
-/INCLUDE QRPGLECPY,BOOLIC
+/INCLUDE './QRPGLECPY/ERRNO_H.rpgle'
+/INCLUDE './QRPGLECPY/PSDS.rpgle'
 
 DCL-C P_SAVE '/QSYS.LIB/QTEMP.LIB/RCV.FILE';
 DCL-C P_FILE '/tmp/rcv.file';
@@ -80,9 +75,9 @@ END-DS;
 DCL-PROC Main;
  DCL-PI *N;
    pPort UNS(5) CONST;
+   pAuthentication CHAR(7) CONST;
    pUseTLS IND CONST;
    pAppID CHAR(32) CONST;
-   pAuthentication CHAR(7) CONST;
  END-PI;
 
  DCL-S UseTLS IND INZ(FALSE);
@@ -267,16 +262,22 @@ DCL-PROC HandleClient;
    pGSK LIKEDS(GSK_Template);
  END-PI;
 
- DCL-PR ManageSavefile EXTPGM('ZSERVERCL');
+ DCL-PR EC_ZSERVER EXTPGM('ZSERVERCL');
    Success CHAR(1);
    Save CHAR(64) CONST;
    File CHAR(64) CONST;
  END-PR;
 
-/INCLUDE QRPGLECPY,IFS_H
-/INCLUDE QRPGLECPY,SETUSR_H
+/INCLUDE './QRPGLECPY/IFS_H.rpgle'
+/INCLUDE './QRPGLECPY/SETUSR_H.rpgle'
 
- DCL-S KEY CHAR(40) INZ('yourkey');
+ DCL-DS SwitchUserProfile QUALIFIED INZ;
+   NewUser CHAR(10);
+   Password CHAR(32);
+   UserHandler CHAR(12);
+ END-DS;
+
+ DCL-S KEY CHAR(40) INZ('youkey');
 
  DCL-S Loop IND INZ(TRUE);
  DCL-S RestoreSuccess IND INZ(TRUE);
@@ -328,7 +329,7 @@ DCL-PROC HandleClient;
      Return;
    EndIf;
 
-   If ( Data = '*AUTH_NONE>' );
+   If ( Data = '*NONE' );
      Data = '*NONONEALLOWED>';
      SendData(pUseTLS :pSocket :pGSK :%Addr(Data) :%Len(%Trim(Data)));
      SendJobLog('+> No anonymous login allowed');
@@ -348,7 +349,7 @@ DCL-PROC HandleClient;
    EndIf;
 
    OriginalUser = PSDS.UserName;
-   QSYGETPH(SwitchUserProfile.NewUser :SwitchUserProfile.Password :SwitchUserProfile.UserHandler
+   EC_QSYGETPH(SwitchUserProfile.NewUser :SwitchUserProfile.Password :SwitchUserProfile.UserHandler
                :ErrorDS :%Len(%TrimR(SwitchUserProfile.Password)) :0);
    Clear SwitchUserProfile.Password;
    If ( ErrorDS.NbrBytesAvl > 0 );
@@ -359,7 +360,7 @@ DCL-PROC HandleClient;
      Return;
    EndIf;
 
-   QWTSETP(SwitchUserProfile.UserHandler :ErrorDS);
+   EC_QWTSETP(SwitchUserProfile.UserHandler :ErrorDS);
    If ( ErrorDS.NbrBytesAvl > 0 );
      Data = '*NOACCESS>' + ErrorDS.MessageID;
      SendData(pUseTLS :pSocket :pGSK :%Addr(Data) :%Len(%Trim(Data)));
@@ -376,20 +377,11 @@ DCL-PROC HandleClient;
    RC = RecieveData(pUseTLS :pSocket :pGSK :%Addr(Data) :%Size(Data));
    Data = '*OK>';
    SendData(pUseTLS :pSocket :pGSK :%Addr(Data) :%Len(%Trim(Data)));
-   SendJobLog('+> Anonymous connected');
+   SendJobLog('+> Unknown user connected');
  EndIf;
 
  // Handle incomming file- and restore informations
  RecieveData(pUseTLS :pSocket :pGSK :%Addr(RestoreCommand) :%Size(RestoreCommand));
- If ( %SubSt(RestoreCommand :1 :3) <> 'RST' );
-   Data = '*NORESTORE>';
-   SendData(pUseTLS :pSocket :pGSK :%Addr(Data) :%Len(%Trim(Data)));
-   SendJobLog('+> Invalid restorecommand recieved. End connection with client');
-   Return;
- Else;
-   Data = '*OK>';
-   SendData(pUseTLS :pSocket :pGSK :%Addr(Data) :%Len(%Trim(Data)));
- EndIf;
 
  // Handle incomming data
  RetrievingFile.FileHandler = IFS_Open(P_FILE :O_WRONLY + O_TRUNC + O_CREAT + O_LARGEFILE
@@ -422,7 +414,7 @@ DCL-PROC HandleClient;
 
  Data = '*OK>';
  Monitor;
-   ManageSavefile(RestoreSuccess :P_SAVE :P_FILE);
+   EC_ZSERVER(RestoreSuccess :P_SAVE :P_FILE);
    On-Error;
      RestoreSuccess = FALSE;
  EndMon;
@@ -447,8 +439,8 @@ DCL-PROC HandleClient;
 
  // Switch back to original userprofile when authentication is *USRPRF
  If ( pAuthentication = '*USRPRF' );
-   QSYGETPH(OriginalUser :'*NOPWD' :SwitchUserProfile.UserHandler :ErrorDS);
-   QWTSETP(SwitchUserProfile.UserHandler :ErrorDS);
+   EC_QSYGETPH(OriginalUser :'*NOPWD' :SwitchUserProfile.UserHandler :ErrorDS);
+   EC_QWTSETP(SwitchUserProfile.UserHandler :ErrorDS);
  EndIf;
 
  Return;
@@ -645,5 +637,5 @@ DCL-PROC SendJobLog;
 END-PROC;
 
 //#########################################################################
-/DEFINE LOAD_ERRNO_PROCEDURE
-/INCLUDE QRPGLECPY,ERRNO_H
+/DEFINE ERRNO_LOAD_PROCEDURE
+/INCLUDE './QRPGLECPY/ERRNO_H.rpgle'
